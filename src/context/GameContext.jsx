@@ -54,10 +54,23 @@ export const GameProvider = ({ children }) => {
       // Organize quests (Supabase returns flat or nested depending on query, 
       // but recursive self-referencing is tricky. 
       // Let's fetch all quests and reconstruct tree in JS for simplicity)
-      const { data: allQuests, error: questsError } = await supabase
+      // Try to fetch with position ordering
+      let { data: allQuests, error: questsError } = await supabase
         .from('quests')
         .select('*')
+        .order('position', { ascending: true })
         .order('created_at', { ascending: true });
+
+      // Fallback: If 'position' column doesn't exist, fetch without it
+      if (questsError && (questsError.code === '42703' || questsError.message?.includes('position'))) {
+        console.warn('Database missing "position" column. Drag and drop persistence will be disabled until schema is updated.');
+        const retry = await supabase
+          .from('quests')
+          .select('*')
+          .order('created_at', { ascending: true });
+        allQuests = retry.data;
+        questsError = retry.error;
+      }
 
       if (questsError) throw questsError;
 
@@ -243,6 +256,198 @@ export const GameProvider = ({ children }) => {
     }
   };
 
+  // Undo Stack
+  const [deletedQuests, setDeletedQuests] = useState([]);
+
+  // Keyboard Listener for Undo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault();
+        undoDeleteQuest();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deletedQuests]); // Depend on deletedQuests to access latest state
+
+  const updateQuest = async (storylineId, questId, newTitle) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('quests')
+        .update({ title: newTitle })
+        .eq('id', questId);
+
+      if (error) throw error;
+
+      // Update Local State
+      const updateQuestRecursive = (quests) => {
+        return quests.map(q => {
+          if (q.id === questId) {
+            return { ...q, title: newTitle };
+          }
+          if (q.subquests.length > 0) {
+            return { ...q, subquests: updateQuestRecursive(q.subquests) };
+          }
+          return q;
+        });
+      };
+
+      setStorylines(storylines.map(s => {
+        if (s.id !== storylineId) return s;
+        return { ...s, quests: updateQuestRecursive(s.quests) };
+      }));
+    } catch (error) {
+      console.error('Error updating quest:', error);
+    }
+  };
+
+  const deleteQuest = async (storylineId, questId) => {
+    if (!user) return;
+
+    // Find quest to save for undo
+    let questToDelete = null;
+    let parentId = null;
+
+    const findQuest = (quests, pId = null) => {
+      for (const q of quests) {
+        if (q.id === questId) {
+          questToDelete = q;
+          parentId = pId;
+          return;
+        }
+        if (q.subquests.length > 0) {
+          findQuest(q.subquests, q.id);
+          if (questToDelete) return;
+        }
+      }
+    };
+
+    const story = storylines.find(s => s.id === storylineId);
+    if (story) findQuest(story.quests);
+
+    if (questToDelete) {
+      // Add to undo stack
+      setDeletedQuests(prev => [...prev, { ...questToDelete, storylineId, parentId }]);
+    }
+
+    try {
+      const { error } = await supabase
+        .from('quests')
+        .delete()
+        .eq('id', questId);
+
+      if (error) throw error;
+
+      // Update Local State
+      const deleteQuestRecursive = (quests) => {
+        return quests.filter(q => q.id !== questId).map(q => ({
+          ...q,
+          subquests: deleteQuestRecursive(q.subquests)
+        }));
+      };
+
+      setStorylines(storylines.map(s => {
+        if (s.id !== storylineId) return s;
+        return { ...s, quests: deleteQuestRecursive(s.quests) };
+      }));
+    } catch (error) {
+      console.error('Error deleting quest:', error);
+    }
+  };
+
+  const undoDeleteQuest = async () => {
+    if (deletedQuests.length === 0 || !user) return;
+
+    const questToRestore = deletedQuests[deletedQuests.length - 1];
+    const { storylineId, parentId, title, completed } = questToRestore;
+
+    try {
+      // Restore to DB
+      const { data, error } = await supabase
+        .from('quests')
+        .insert([{
+          storyline_id: storylineId,
+          title,
+          parent_id: parentId,
+          completed
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Remove from undo stack
+      setDeletedQuests(prev => prev.slice(0, -1));
+
+      // Update Local State
+      const newQuest = { ...data, subquests: [] }; // Subquests are lost on delete unless we recursively restore them. For now, simple restore.
+
+      setStorylines(storylines.map(storyline => {
+        if (storyline.id !== storylineId) return storyline;
+
+        if (parentId) {
+          const addSubquestRecursive = (quests) => {
+            return quests.map(q => {
+              if (q.id === parentId) {
+                return { ...q, subquests: [...q.subquests, newQuest] };
+              }
+              if (q.subquests.length > 0) {
+                return { ...q, subquests: addSubquestRecursive(q.subquests) };
+              }
+              return q;
+            });
+          };
+          return { ...storyline, quests: addSubquestRecursive(storyline.quests) };
+        } else {
+          return { ...storyline, quests: [...storyline.quests, newQuest] };
+        }
+      }));
+
+    } catch (error) {
+      console.error('Error restoring quest:', error);
+    }
+  };
+
+  const reorderQuests = async (storylineId, reorderedQuests) => {
+    // Optimistically update local state
+    setStorylines(storylines.map(s => {
+      if (s.id !== storylineId) return s;
+      return { ...s, quests: reorderedQuests };
+    }));
+
+    if (!user) return;
+
+    try {
+      // Prepare updates for Supabase
+      // We need to update the 'position' field for each quest
+      const updates = reorderedQuests.map((q, index) => ({
+        id: q.id,
+        position: index,
+        title: q.title, // Required for upsert if we don't specify columns, but let's try explicit update
+        storyline_id: storylineId
+      }));
+
+      // Supabase doesn't have a bulk update for different values in one go easily without upsert
+      // Let's use upsert with the ID
+      const { error } = await supabase
+        .from('quests')
+        .upsert(updates, { onConflict: 'id' });
+
+      if (error) {
+        // Ignore missing column error to prevent crashing
+        if (error.code === '42703' || error.message?.includes('position')) {
+          console.warn('Cannot save order: "position" column missing.');
+          return;
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error reordering quests:', error);
+    }
+  };
+
   return (
     <GameContext.Provider value={{
       user,
@@ -255,6 +460,9 @@ export const GameProvider = ({ children }) => {
       addStoryline,
       deleteStoryline,
       addQuest,
+      updateQuest,
+      deleteQuest,
+      reorderQuests,
       completeQuest,
       addXp
     }}>

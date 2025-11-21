@@ -20,6 +20,7 @@ create table public.quests (
   title text not null,
   completed boolean default false,
   parent_id uuid references public.quests on delete cascade,
+  position integer default 0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

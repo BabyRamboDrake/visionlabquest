@@ -1,25 +1,79 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Settings } from 'lucide-react';
 
-const Timer = () => {
-    const [timeLeft, setTimeLeft] = useState(25 * 60);
-    const [isActive, setIsActive] = useState(false);
-    const [mode, setMode] = useState('work'); // 'work', 'shortBreak', 'longBreak'
-    const [customTime, setCustomTime] = useState(25);
-    const [isEditing, setIsEditing] = useState(false);
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Settings } from 'lucide-react';
 
+const Timer = () => {
+    // Initialize state from localStorage if available
+    const [customTime, setCustomTime] = useState(() => {
+        const saved = localStorage.getItem('pomodoro_customTime');
+        return saved ? parseInt(saved, 10) : 25;
+    });
+
+    const [mode, setMode] = useState(() => {
+        return localStorage.getItem('pomodoro_mode') || 'work';
+    });
+
+    const [timeLeft, setTimeLeft] = useState(() => {
+        const saved = localStorage.getItem('pomodoro_timeLeft');
+        return saved ? parseInt(saved, 10) : 25 * 60;
+    });
+
+    const [isActive, setIsActive] = useState(() => {
+        const saved = localStorage.getItem('pomodoro_isActive');
+        return saved === 'true';
+    });
+
+    // Ref to track the last tick time for accurate resume after refresh
+    const lastTickRef = useRef(Date.now());
+
+    // Save settings whenever they change
+    useEffect(() => {
+        localStorage.setItem('pomodoro_customTime', customTime);
+        localStorage.setItem('pomodoro_mode', mode);
+        localStorage.setItem('pomodoro_isActive', isActive);
+    }, [customTime, mode, isActive]);
+
+    // Save timeLeft frequently (but maybe not every second to avoid thrashing, 
+    // though for localStorage it's fine. Better: calculate diff on mount)
+    useEffect(() => {
+        localStorage.setItem('pomodoro_timeLeft', timeLeft);
+    }, [timeLeft]);
+
+    // Handle Timer Logic
     useEffect(() => {
         let interval = null;
+
         if (isActive && timeLeft > 0) {
+            // Check if we missed time while away/refreshing
+            const now = Date.now();
+            const lastTick = parseInt(localStorage.getItem('pomodoro_lastTick') || now);
+            const delta = Math.floor((now - lastTick) / 1000);
+
+            if (delta > 1) {
+                // If we were away for more than 1 second, subtract that time
+                // This handles the "refresh" case where the timer "keeps running"
+                setTimeLeft(prev => Math.max(0, prev - delta));
+            }
+
             interval = setInterval(() => {
-                setTimeLeft((timeLeft) => timeLeft - 1);
+                setTimeLeft((prev) => {
+                    const newVal = prev - 1;
+                    localStorage.setItem('pomodoro_lastTick', Date.now());
+                    return newVal;
+                });
             }, 1000);
-        } else if (timeLeft === 0) {
+        } else if (timeLeft === 0 && isActive) {
             setIsActive(false);
             // Play sound or notify?
+        } else {
+            // If paused, just update lastTick so we don't jump when resuming
+            localStorage.setItem('pomodoro_lastTick', Date.now());
         }
+
         return () => clearInterval(interval);
-    }, [isActive, timeLeft]);
+    }, [isActive]);
 
     const toggleTimer = () => {
         setIsActive(!isActive);
@@ -27,17 +81,32 @@ const Timer = () => {
 
     const resetTimer = () => {
         setIsActive(false);
-        if (mode === 'work') setTimeLeft(customTime * 60);
-        if (mode === 'shortBreak') setTimeLeft(5 * 60);
-        if (mode === 'longBreak') setTimeLeft(15 * 60);
+        let newTime;
+        if (mode === 'work') newTime = customTime * 60;
+        if (mode === 'shortBreak') newTime = 5 * 60;
+        if (mode === 'longBreak') newTime = 15 * 60;
+        setTimeLeft(newTime);
+        // Clear lastTick to prevent jumping
+        localStorage.setItem('pomodoro_lastTick', Date.now());
     };
 
     const handleTimeChange = (e) => {
         const val = parseInt(e.target.value);
         if (!isNaN(val) && val > 0) {
             setCustomTime(val);
-            if (mode === 'work') setTimeLeft(val * 60);
+            if (mode === 'work') {
+                setTimeLeft(val * 60);
+                setIsActive(false);
+            }
         }
+    };
+
+    const handleModeChange = (newMode) => {
+        setMode(newMode);
+        setIsActive(false);
+        if (newMode === 'work') setTimeLeft(customTime * 60);
+        if (newMode === 'shortBreak') setTimeLeft(5 * 60);
+        if (newMode === 'longBreak') setTimeLeft(15 * 60);
     };
 
     const formatTime = (seconds) => {
@@ -46,13 +115,15 @@ const Timer = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const [isEditing, setIsEditing] = useState(false);
+
     const progress = mode === 'work'
         ? ((customTime * 60 - timeLeft) / (customTime * 60)) * 100
-        : 0; // Simplified progress for now
+        : 0;
 
     return (
         <div className="card" style={{ textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-            {/* Progress Background (optional visual flair) */}
+            {/* Progress Background */}
             <div style={{
                 position: 'absolute',
                 bottom: 0,
@@ -66,13 +137,13 @@ const Timer = () => {
             <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
                 <button
                     className={`btn ${mode === 'work' ? 'btn-primary' : 'btn-icon'}`}
-                    onClick={() => { setMode('work'); setTimeLeft(customTime * 60); setIsActive(false); }}
+                    onClick={() => handleModeChange('work')}
                 >
                     Focus
                 </button>
                 <button
                     className={`btn ${mode === 'shortBreak' ? 'btn-primary' : 'btn-icon'}`}
-                    onClick={() => { setMode('shortBreak'); setTimeLeft(5 * 60); setIsActive(false); }}
+                    onClick={() => handleModeChange('shortBreak')}
                 >
                     Short Break
                 </button>
