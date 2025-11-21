@@ -8,29 +8,25 @@
 5.  Copy the contents of `schema.sql` from this project and paste it into the query editor.
 6.  Click **Run** to create the tables and security policies.
 7.  Go to **Project Settings** -> **API**.
-8.  Copy the `Project URL` and `anon` public key. You will need these for Vercel.
+8.  Copy the `Project URL` and `anon` public key.
 
-## 2. GitHub Setup
-1.  Create a new repository on GitHub (e.g., `pomodoro-quest`).
-2.  Push your code to this repository:
-    ```bash
-    git init
-    git add .
-    git commit -m "Initial commit"
-    git branch -M main
-    git remote add origin <YOUR_GITHUB_REPO_URL>
-    git push -u origin main
+## 2. Netlify Setup (Hosting)
+Since you have already deployed to Netlify:
+1.  Go to your site settings on [netlify.com](https://netlify.com).
+2.  Navigate to **Site configuration** -> **Environment variables**.
+3.  Click **Add a variable**.
+4.  Add the following variables (using the values from Supabase):
+    - Key: `VITE_SUPABASE_URL`
+      Value: (Your Project URL)
+    - Key: `VITE_SUPABASE_ANON_KEY`
+      Value: (Your anon public key)
+5.  **Redeploy**: You may need to trigger a new deploy for the changes to take effect (or push a small change to GitHub).
+
+## 3. Local Development
+To run the app locally with Supabase:
+1.  Create a file named `.env.local` in the root directory (`pomodoro-quest/.env.local`).
+2.  Add your keys there:
     ```
-
-## 3. Vercel Setup (Hosting)
-1.  Go to [vercel.com](https://vercel.com) and sign up/login.
-2.  Click **Add New...** -> **Project**.
-3.  Import your `pomodoro-quest` repository.
-4.  In the **Configure Project** screen, find the **Environment Variables** section.
-5.  Add the following variables (using the values from Supabase):
-    - `VITE_SUPABASE_URL`: Your Supabase Project URL
-    - `VITE_SUPABASE_ANON_KEY`: Your Supabase `anon` key
-6.  Click **Deploy**.
-
-## 4. Done!
-Your app will be live at a URL like `https://pomodoro-quest.vercel.app`.
+    VITE_SUPABASE_URL=your_project_url
+    VITE_SUPABASE_ANON_KEY=your_anon_key
+    ```

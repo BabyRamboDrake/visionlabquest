@@ -19,6 +19,7 @@ const Dashboard = () => {
     return (
         <div className="container">
             <header style={{ marginBottom: '3rem', textAlign: 'center' }}>
+                <img src="/logo.png" alt="Pomodoro Quest Logo" style={{ width: '120px', height: 'auto', marginBottom: '1rem', filter: 'drop-shadow(0 0 10px var(--color-primary-glow))' }} />
                 <h1 style={{ fontSize: '3rem', color: 'var(--color-primary)', textShadow: 'var(--shadow-glow)', marginBottom: '0.5rem' }}>
                     Pomodoro Quest
                 </h1>
