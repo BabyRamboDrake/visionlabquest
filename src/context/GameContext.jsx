@@ -97,6 +97,27 @@ export const GameProvider = ({ children }) => {
     }
   };
 
+  const uploadReceipt = async (file) => {
+    if (!user) return null;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('receipts').getPublicUrl(filePath);
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading receipt:', error);
+      throw error;
+    }
+  };
+
   const deleteExpense = async (id) => {
     if (!user) return;
     try {
@@ -623,7 +644,10 @@ export const GameProvider = ({ children }) => {
       addXp,
       addExpense,
       updateExpense,
-      deleteExpense
+      addExpense,
+      updateExpense,
+      deleteExpense,
+      uploadReceipt
     }}>
       {children}
     </GameContext.Provider>

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Plus, Trash2, DollarSign, FileText, Calendar, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Plus, Trash2, DollarSign, FileText, Calendar, ArrowUpRight, ArrowDownLeft, Upload, Paperclip } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Accounting = () => {
-    const { expenses, addExpense, deleteExpense } = useGame();
+    const { expenses, addExpense, deleteExpense, uploadReceipt } = useGame();
     const [isAdding, setIsAdding] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [formData, setFormData] = useState({
         description: '',
         amount: '',
@@ -14,7 +15,8 @@ const Accounting = () => {
         invoice_number: '',
         invoice_date: new Date().toISOString().split('T')[0],
         due_date: '',
-        category: ''
+        category: '',
+        receipt_url: ''
     });
 
     const calculateTotals = () => {
@@ -23,6 +25,24 @@ const Accounting = () => {
         const mvaAmount = (amount * mvaRate) / 100;
         const totalAmount = amount + mvaAmount;
         return { mvaAmount, totalAmount };
+    };
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const url = await uploadReceipt(file);
+            if (url) {
+                setFormData({ ...formData, receipt_url: url });
+            }
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert('Failed to upload receipt. Please try again.');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -45,7 +65,8 @@ const Accounting = () => {
             invoice_number: '',
             invoice_date: new Date().toISOString().split('T')[0],
             due_date: '',
-            category: ''
+            category: '',
+            receipt_url: ''
         });
     };
 
@@ -202,9 +223,30 @@ const Accounting = () => {
                             </div>
                         </div>
 
+                        <div>
+                            <label>Receipt / Document</label>
+                            <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <label className="btn btn-accent" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Upload size={16} /> {uploading ? 'Uploading...' : 'Upload File'}
+                                    <input
+                                        type="file"
+                                        onChange={handleFileUpload}
+                                        style={{ display: 'none' }}
+                                        disabled={uploading}
+                                        accept="image/*,.pdf"
+                                    />
+                                </label>
+                                {formData.receipt_url && (
+                                    <span style={{ color: 'var(--color-success)', fontSize: '0.9rem' }}>
+                                        File attached!
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                             <button type="button" className="btn" onClick={() => setIsAdding(false)}>Cancel</button>
-                            <button type="submit" className="btn btn-primary">Save Entry</button>
+                            <button type="submit" className="btn btn-primary" disabled={uploading}>Save Entry</button>
                         </div>
                     </form>
                 </div>
@@ -256,7 +298,19 @@ const Accounting = () => {
                                     <td style={{ padding: '1rem', textAlign: 'right' }}>{expense.amount}</td>
                                     <td style={{ padding: '1rem', textAlign: 'right' }}>{expense.mva_amount}</td>
                                     <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>{expense.total_amount}</td>
-                                    <td style={{ padding: '1rem' }}>
+                                    <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
+                                        {expense.receipt_url && (
+                                            <a
+                                                href={expense.receipt_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="btn-icon"
+                                                title="View Receipt"
+                                                style={{ color: 'var(--color-accent)' }}
+                                            >
+                                                <Paperclip size={16} />
+                                            </a>
+                                        )}
                                         <button
                                             className="btn-icon"
                                             onClick={() => deleteExpense(expense.id)}
