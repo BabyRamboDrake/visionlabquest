@@ -13,32 +13,134 @@ export const GameProvider = ({ children }) => {
   const [xp, setXp] = useState(0);
   const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [inventory, setInventory] = useState([]);
+  const [items, setItems] = useState([]);
+  const [expenses, setExpenses] = useState([]);
 
-  // Auth Listener
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  // ... (existing auth listener) ...
 
   // Fetch Data when User changes
   useEffect(() => {
     if (user) {
       fetchData();
+      fetchInventory();
+      fetchExpenses(); // Fetch expenses
     } else {
       setStorylines([]);
+      setInventory([]);
+      setExpenses([]);
       setXp(0);
       setLevel(1);
     }
   }, [user]);
+
+  // ... (existing fetchData and fetchInventory) ...
+
+  const fetchExpenses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('invoice_date', { ascending: false });
+
+      if (error) throw error;
+      setExpenses(data);
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+    }
+  };
+
+  const addExpense = async (expenseData) => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert([{ ...expenseData, user_id: user.id }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setExpenses([data, ...expenses]);
+      return data;
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      throw error;
+    }
+  };
+
+  const updateExpense = async (id, updates) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+      setExpenses(expenses.map(e => e.id === id ? { ...e, ...updates } : e));
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw error;
+    }
+  };
+
+  const deleteExpense = async (id) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setExpenses(expenses.filter(e => e.id !== id));
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      throw error;
+    }
+  };
+
+  const awardRandomItem = async () => {
+    if (!user || items.length === 0) return;
+
+    // Simple random drop logic
+    const randomItem = items[Math.floor(Math.random() * items.length)];
+
+    try {
+      // Check if user already has item
+      const existingEntry = inventory.find(i => i.item_id === randomItem.id);
+
+      if (existingEntry) {
+        // Update quantity
+        const { error } = await supabase
+          .from('inventory')
+          .update({ quantity: existingEntry.quantity + 1 })
+          .eq('id', existingEntry.id);
+
+        if (error) throw error;
+
+        setInventory(inventory.map(i =>
+          i.id === existingEntry.id ? { ...i, quantity: i.quantity + 1, item: existingEntry.item } : i
+        ));
+      } else {
+        // Insert new entry
+        const { data, error } = await supabase
+          .from('inventory')
+          .insert([{ user_id: user.id, item_id: randomItem.id }])
+          .select('*, item:items(*)')
+          .single();
+
+        if (error) throw error;
+        setInventory([...inventory, data]);
+      }
+
+      // Return item for notification
+      return randomItem;
+
+    } catch (error) {
+      console.error('Error awarding item:', error);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -110,6 +212,31 @@ export const GameProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  const fetchInventory = async () => {
+    try {
+      // Fetch all available items first (for reference)
+      const { data: allItems, error: itemsError } = await supabase
+        .from('items')
+        .select('*');
+
+      if (itemsError) throw itemsError;
+      setItems(allItems);
+
+      // Fetch user inventory
+      const { data: userInventory, error: invError } = await supabase
+        .from('inventory')
+        .select('*, item:items(*)')
+        .eq('user_id', user.id);
+
+      if (invError) throw invError;
+      setInventory(userInventory);
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+    }
+  };
+
+
 
   const addStoryline = async (title) => {
     if (!user) return;
@@ -236,10 +363,12 @@ export const GameProvider = ({ children }) => {
     let newXp = xp + amount;
     let newLevel = level;
     const xpForNextLevel = level * 1000;
+    let leveledUp = false;
 
     if (newXp >= xpForNextLevel) {
       newLevel += 1;
       newXp = newXp - xpForNextLevel;
+      leveledUp = true;
     }
 
     setXp(newXp);
@@ -251,9 +380,20 @@ export const GameProvider = ({ children }) => {
         .upsert({ user_id: user.id, xp: newXp, level: newLevel });
 
       if (error) throw error;
+
+      if (leveledUp) {
+        const reward = await awardRandomItem();
+        if (reward) {
+          // We could trigger a global toast/modal here, or return it to the caller
+          // For now, let's just log it, the UI can react to inventory changes or we can add a notification context later
+          console.log(`Level Up! You found a ${reward.name}!`);
+          return { leveledUp: true, reward };
+        }
+      }
     } catch (error) {
       console.error('Error updating progress:', error);
     }
+    return { leveledUp: false };
   };
 
   // Undo Stack
@@ -457,6 +597,9 @@ export const GameProvider = ({ children }) => {
       setActiveStorylineId,
       xp,
       level,
+      inventory,
+      items,
+      expenses,
       addStoryline,
       deleteStoryline,
       addQuest,
@@ -464,7 +607,10 @@ export const GameProvider = ({ children }) => {
       deleteQuest,
       reorderQuests,
       completeQuest,
-      addXp
+      addXp,
+      addExpense,
+      updateExpense,
+      deleteExpense
     }}>
       {children}
     </GameContext.Provider>
