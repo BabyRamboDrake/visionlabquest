@@ -1,12 +1,12 @@
 -- Create profiles table
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users not null primary key,
   email text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Create storylines table
-create table public.storylines (
+create table if not exists public.storylines (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references auth.users not null,
   title text not null,
@@ -14,7 +14,7 @@ create table public.storylines (
 );
 
 -- Create quests table
-create table public.quests (
+create table if not exists public.quests (
   id uuid default uuid_generate_v4() primary key,
   storyline_id uuid references public.storylines on delete cascade not null,
   title text not null,
@@ -25,11 +25,11 @@ create table public.quests (
 );
 
 -- Create user_progress table
-create table public.user_progress (
+create table if not exists public.user_progress (
   user_id uuid references auth.users not null primary key,
   xp integer default 0,
   level integer default 1,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  last_updated timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Enable RLS
@@ -39,28 +39,55 @@ alter table public.quests enable row level security;
 alter table public.user_progress enable row level security;
 
 -- Policies
+-- Profiles
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
+
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
 
+-- Storylines
+drop policy if exists "Users can view own storylines" on public.storylines;
 create policy "Users can view own storylines" on public.storylines for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own storylines" on public.storylines;
 create policy "Users can insert own storylines" on public.storylines for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own storylines" on public.storylines;
+create policy "Users can update own storylines" on public.storylines for update using (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own storylines" on public.storylines;
 create policy "Users can delete own storylines" on public.storylines for delete using (auth.uid() = user_id);
 
+-- Quests
+drop policy if exists "Users can view own quests" on public.quests;
 create policy "Users can view own quests" on public.quests for select using (
-  exists (select 1 from public.storylines where id = public.quests.storyline_id and user_id = auth.uid())
-);
-create policy "Users can insert own quests" on public.quests for insert with check (
-  exists (select 1 from public.storylines where id = public.quests.storyline_id and user_id = auth.uid())
-);
-create policy "Users can update own quests" on public.quests for update using (
-  exists (select 1 from public.storylines where id = public.quests.storyline_id and user_id = auth.uid())
-);
-create policy "Users can delete own quests" on public.quests for delete using (
-  exists (select 1 from public.storylines where id = public.quests.storyline_id and user_id = auth.uid())
+  exists ( select 1 from public.storylines s where s.id = storyline_id and s.user_id = auth.uid() )
 );
 
+drop policy if exists "Users can insert own quests" on public.quests;
+create policy "Users can insert own quests" on public.quests for insert with check (
+  exists ( select 1 from public.storylines s where s.id = storyline_id and s.user_id = auth.uid() )
+);
+
+drop policy if exists "Users can update own quests" on public.quests;
+create policy "Users can update own quests" on public.quests for update using (
+  exists ( select 1 from public.storylines s where s.id = storyline_id and s.user_id = auth.uid() )
+);
+
+drop policy if exists "Users can delete own quests" on public.quests;
+create policy "Users can delete own quests" on public.quests for delete using (
+  exists ( select 1 from public.storylines s where s.id = storyline_id and s.user_id = auth.uid() )
+);
+
+-- User Progress
+drop policy if exists "Users can view own progress" on public.user_progress;
 create policy "Users can view own progress" on public.user_progress for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own progress" on public.user_progress;
 create policy "Users can update own progress" on public.user_progress for update using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own progress" on public.user_progress;
 create policy "Users can insert own progress" on public.user_progress for insert with check (auth.uid() = user_id);
 
 -- Trigger to create profile and progress on signup

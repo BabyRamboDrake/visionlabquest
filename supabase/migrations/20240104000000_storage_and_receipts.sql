@@ -1,5 +1,10 @@
--- Add receipt_url to expenses
-alter table public.expenses add column receipt_url text;
+-- Add receipt_url to expenses if it doesn't exist
+do $$ 
+begin 
+  if not exists (select 1 from information_schema.columns where table_name = 'expenses' and column_name = 'receipt_url') then
+    alter table public.expenses add column receipt_url text;
+  end if;
+end $$;
 
 -- Create storage bucket for receipts if it doesn't exist
 insert into storage.buckets (id, name, public)

@@ -1,5 +1,5 @@
 -- Create items table
-create table public.items (
+create table if not exists public.items (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
   description text,
@@ -9,7 +9,7 @@ create table public.items (
 );
 
 -- Create inventory table
-create table public.inventory (
+create table if not exists public.inventory (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references auth.users not null,
   item_id uuid references public.items not null,
@@ -23,12 +23,17 @@ alter table public.items enable row level security;
 alter table public.inventory enable row level security;
 
 -- Policies for items (Public read, Admin write - for now just public read)
-create policy "Items are viewable by everyone" on public.items for select using (true);
+drop policy if exists "Everyone can view items" on public.items;
+create policy "Everyone can view items" on public.items for select using (true);
 
 -- Policies for inventory
+drop policy if exists "Users can view own inventory" on public.inventory;
 create policy "Users can view own inventory" on public.inventory for select using (auth.uid() = user_id);
-create policy "Users can insert own inventory" on public.inventory for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can add to own inventory" on public.inventory;
+create policy "Users can add to own inventory" on public.inventory for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update own inventory" on public.inventory;
 create policy "Users can update own inventory" on public.inventory for update using (auth.uid() = user_id);
+drop policy if exists "Users can delete own inventory" on public.inventory;
 create policy "Users can delete own inventory" on public.inventory for delete using (auth.uid() = user_id);
 
 -- Seed initial items
