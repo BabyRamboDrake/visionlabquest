@@ -1,4 +1,5 @@
 import React from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import Timer from '../components/Timer';
 import LevelBar from '../components/LevelBar';
@@ -6,20 +7,21 @@ import QuestLog from '../components/QuestLog';
 import { ArrowLeft } from 'lucide-react';
 
 const StorylineView = () => {
-    const { activeStorylineId, storylines, setActiveStorylineId } = useGame();
-    const storyline = storylines.find(s => s.id === activeStorylineId);
+    const { id } = useParams();
+    const { storylines } = useGame();
+    const storyline = storylines.find(s => s.id === id);
 
-    if (!storyline) return <div>Loading...</div>;
+    if (!storyline) return <div className="container">Loading or Storyline not found...</div>;
 
     return (
         <div className="container">
-            <button
+            <Link
+                to="/"
                 className="btn btn-icon"
-                onClick={() => setActiveStorylineId(null)}
-                style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: 0 }}
+                style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: 0, textDecoration: 'none', color: 'var(--color-text)' }}
             >
                 <ArrowLeft size={20} /> Back to Dashboard
-            </button>
+            </Link>
 
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h1 style={{ fontSize: '2rem', color: 'var(--color-text)' }}>
@@ -34,7 +36,7 @@ const StorylineView = () => {
                 </div>
 
                 <div style={{ height: '600px' }}> {/* Fixed height for scrolling quest log */}
-                    <QuestLog storylineId={activeStorylineId} />
+                    <QuestLog storylineId={id} />
                 </div>
             </div>
         </div>

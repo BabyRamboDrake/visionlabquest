@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Plus, MoreVertical, Trash2, Backpack, DollarSign } from 'lucide-react';
+import { Plus, MoreVertical, Trash2, Backpack, DollarSign, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LevelBar from '../components/LevelBar';
 import Inventory from '../components/Inventory';
@@ -73,11 +73,22 @@ const Dashboard = () => {
 
                 {/* Existing Storylines */}
                 {storylines.map(story => (
-                    <div key={story.id} className="card" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
+                    <div key={story.id} className="card" style={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        border: '2px solid var(--color-primary)',
+                        background: 'linear-gradient(145deg, var(--color-card), rgba(0,0,0,0.2))',
+                        transition: 'transform 0.2s ease',
+                        cursor: 'pointer'
+                    }}>
+                        <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 5 }}>
                             <button
                                 className="btn-icon"
-                                onClick={() => setActiveMenuId(activeMenuId === story.id ? null : story.id)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setActiveMenuId(activeMenuId === story.id ? null : story.id);
+                                }}
                             >
                                 <MoreVertical size={20} />
                             </button>
@@ -115,12 +126,28 @@ const Dashboard = () => {
                             )}
                         </div>
 
-                        <Link to={`/storyline/${story.id}`} style={{ textDecoration: 'none', color: 'inherit', flex: 1 }}>
-                            <h2 style={{ marginTop: 0, paddingRight: '2rem' }}>{story.title}</h2>
-                            <div style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+                        <Link to={`/storyline/${story.id}`} style={{ textDecoration: 'none', color: 'inherit', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '8px',
+                                    background: 'var(--color-primary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white'
+                                }}>
+                                    <BookOpen size={24} />
+                                </div>
+                                <h2 style={{ margin: 0, fontSize: '1.5rem', lineHeight: 1.2 }}>{story.title}</h2>
+                            </div>
+
+                            <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
                                 {story.quests.filter(q => q.completed).length} / {story.quests.length} Quests Completed
                             </div>
-                            <div className="progress-bar">
+
+                            <div className="progress-bar" style={{ height: '8px', marginTop: 'auto' }}>
                                 <div
                                     className="progress-fill"
                                     style={{ width: `${story.quests.length > 0 ? (story.quests.filter(q => q.completed).length / story.quests.length) * 100 : 0}%` }}
