@@ -49,13 +49,20 @@ const Accounting = () => {
         e.preventDefault();
         const { mvaAmount, totalAmount } = calculateTotals();
 
+        // Sanitize data: Convert empty strings to null for optional fields
+        const sanitizedData = {
+            ...formData,
+            amount: parseFloat(formData.amount),
+            mva_amount: mvaAmount,
+            total_amount: totalAmount,
+            due_date: formData.due_date || null,
+            invoice_number: formData.invoice_number || null,
+            category: formData.category || null,
+            receipt_url: formData.receipt_url || null
+        };
+
         try {
-            await addExpense({
-                ...formData,
-                amount: parseFloat(formData.amount),
-                mva_amount: mvaAmount,
-                total_amount: totalAmount
-            });
+            await addExpense(sanitizedData);
 
             setIsAdding(false);
             setFormData({
