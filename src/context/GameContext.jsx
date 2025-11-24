@@ -17,7 +17,20 @@ export const GameProvider = ({ children }) => {
   const [items, setItems] = useState([]);
   const [expenses, setExpenses] = useState([]);
 
-  // ... (existing auth listener) ...
+  // Auth Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Fetch Data when User changes
   useEffect(() => {
