@@ -64,7 +64,7 @@ export const GameProvider = ({ children }) => {
   };
 
   const addExpense = async (expenseData) => {
-    if (!user) return;
+    if (!user) throw new Error('User not logged in');
     try {
       const { data, error } = await supabase
         .from('expenses')
@@ -82,7 +82,7 @@ export const GameProvider = ({ children }) => {
   };
 
   const updateExpense = async (id, updates) => {
-    if (!user) return;
+    if (!user) throw new Error('User not logged in');
     try {
       const { error } = await supabase
         .from('expenses')
@@ -97,8 +97,24 @@ export const GameProvider = ({ children }) => {
     }
   };
 
+  const deleteExpense = async (id) => {
+    if (!user) throw new Error('User not logged in');
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setExpenses(expenses.filter(e => e.id !== id));
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      throw error;
+    }
+  };
+
   const uploadReceipt = async (file) => {
-    if (!user) return null;
+    if (!user) throw new Error('User not logged in');
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
@@ -114,22 +130,6 @@ export const GameProvider = ({ children }) => {
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading receipt:', error);
-      throw error;
-    }
-  };
-
-  const deleteExpense = async (id) => {
-    if (!user) return;
-    try {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      setExpenses(expenses.filter(e => e.id !== id));
-    } catch (error) {
-      console.error('Error deleting expense:', error);
       throw error;
     }
   };

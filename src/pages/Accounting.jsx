@@ -39,7 +39,7 @@ const Accounting = () => {
             }
         } catch (error) {
             console.error('Upload failed:', error);
-            alert('Failed to upload receipt. Please try again.');
+            alert(`Failed to upload receipt: ${error.message}`);
         } finally {
             setUploading(false);
         }
@@ -49,25 +49,30 @@ const Accounting = () => {
         e.preventDefault();
         const { mvaAmount, totalAmount } = calculateTotals();
 
-        await addExpense({
-            ...formData,
-            amount: parseFloat(formData.amount),
-            mva_amount: mvaAmount,
-            total_amount: totalAmount
-        });
+        try {
+            await addExpense({
+                ...formData,
+                amount: parseFloat(formData.amount),
+                mva_amount: mvaAmount,
+                total_amount: totalAmount
+            });
 
-        setIsAdding(false);
-        setFormData({
-            description: '',
-            amount: '',
-            mva_rate: 25,
-            type: 'payable',
-            invoice_number: '',
-            invoice_date: new Date().toISOString().split('T')[0],
-            due_date: '',
-            category: '',
-            receipt_url: ''
-        });
+            setIsAdding(false);
+            setFormData({
+                description: '',
+                amount: '',
+                mva_rate: 25,
+                type: 'payable',
+                invoice_number: '',
+                invoice_date: new Date().toISOString().split('T')[0],
+                due_date: '',
+                category: '',
+                receipt_url: ''
+            });
+        } catch (error) {
+            console.error('Save failed:', error);
+            alert(`Failed to save entry: ${error.message}`);
+        }
     };
 
     const totalPayable = expenses
